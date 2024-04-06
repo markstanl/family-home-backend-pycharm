@@ -83,6 +83,14 @@ def get_city(city):
 
 @app.route("/filter_data", methods=["GET"])
 def filter():
+    """
+    This function filters the cities based on the user's input
+    :param user_employability: A ranking 1-5 of how important employability is to the user
+    :param user_safety: A ranking 1-5 of how important safety is to the user
+    :param user_quality: A ranking 1-5 of how important quality is to the user
+    :param user_budget: The user's budget
+    :return: A JSON list of cities sorted by the user's preferences
+    """
     load_data()
     makeArrays()
     # return jsonify(cities_data_fin)
@@ -95,21 +103,33 @@ def filter():
     user_quality = int(request.args.get("user_quality", default=None))
     user_budget = float(request.args.get("user_budget", default=None))
 
+    if user_employability is None or user_safety is None or user_quality is None or user_budget is None:
+        return jsonify({"error": "Missing required parameters"})\
+
+    if user_employability < 1 or user_employability > 5 or user_safety < 1 or user_safety > 5 or user_quality < 1 or user_quality > 5 or user_budget < 0:
+        return jsonify({"error": "Invalid parameters"})
     # Filter cities based on user budget
     filtered_cities = [city for city in cities_data_fin.values() if city["house_median_value"] <= user_budget]
 
-    modified_quality = [float(q) * user_quality for q in qualityNormalized]
-    modified_safety = [float(s) * user_safety for s in safetyNormalized]
-    modified_employability = [float(e) * user_employability for e in employabilityNormalized]
+    # Uses list comprehension to fill in the modified ratings
+    modified_quality = [float(city_quality_ranking_normalized) * user_quality for city_quality_ranking_normalized in
+                        qualityNormalized]
+    modified_safety = [float(city_safety_ranking_normalized) * user_safety/1000 for city_safety_ranking_normalized in
+                       safetyNormalized]  # /1000 because user_safety was weirdly high
+    modified_employability = [float(city_employability_ranking_normalized) * user_employability for
+                              city_employability_ranking_normalized in employabilityNormalized]
 
     # Combine modified ratings
-    added_rating = [float(q) + float(s) + float(e) for q, s, e in
+    combined_rating = [float(quality_ranking) + float(safety_ranking) + float(employability_ranking) for
+                       quality_ranking, safety_ranking, employability_ranking in
                     zip(modified_quality, modified_safety, modified_employability)]
 
-    # Sort cities based on modified ratings
-    sorted_cities = [city for _, city in sorted(zip(added_rating, filtered_cities), reverse=True)]
-    sorted_cities = [city for _, city in
-                     sorted(zip(added_rating, filtered_cities), key=lambda x: x[1]["house_median_value"], reverse=True)]
+    # print(combined_rating)
+    # print([city['city']for city in filtered_cities])
+
+    city_rating_pairs = list(zip(filtered_cities, combined_rating))
+    city_rating_pairs.sort(key=lambda pair: pair[1], reverse=True)
+    sorted_cities = [pair[0] for pair in city_rating_pairs]
 
     return jsonify(sorted_cities)
 
